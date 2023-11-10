@@ -16,7 +16,7 @@ AVD_REGS = [
     #(0x1010000, 0x4000, "dart"),
     #(0x1002000, 0x1000, "unk2"),
     (0x1070000, 0x4000, "piodma"),
-    #(0x1088000, 0x4000, "sram"),
+    (0x1088000, 0x4000, "sram"),
     (0x108c000, 0xc000, "cmd"),
     #(0x1098000, 0x4000, "mbox"),
     #(0x10a3000, 0x1000, "unka"),
@@ -57,8 +57,8 @@ class AVDTracer(Tracer):
                 print(e)
                 return None
         iomon1.readmem = readmem_iova
-        #iomon.add(0x4000, 0x4000, "dart-0-0x4000")
-        #iomon.add(0x744000, 0x100, "dart-0-0x744000")
+        #iomon.add(0x2c000, 0x4000, "dart-0x2c000")
+        #iomon.add(0x774000, 0x100, "dart-0x774000")
         self.iomon = iomon
         self.iomon1 = iomon1
         self.state_active = False
@@ -70,15 +70,10 @@ class AVDTracer(Tracer):
     def avd_w64(self, off, x): return self.p.write64(self.base + off, x)
 
     def start(self):
-        self.hv.add_tracer(irange(self.base + 0x1098004, 4), "avd-mbox-init", TraceMode.SYNC, self.evt_rw_hook, self.w_AVD_MBOX_INIT)
+        self.hv.trace_range(irange(self.dev.get_reg(0)[0], self.dev.get_reg(0)[1]), mode=TraceMode.SYNC)
+        self.hv.trace_range(irange(AVD_BASE + 0x1080000, 0x18000), False)
         self.hv.add_tracer(irange(self.base + 0x1098054, 4), "avd-mbox-54", TraceMode.SYNC, self.evt_rw_hook, self.w_AVD_MBOX_0054)
         self.hv.add_tracer(irange(self.base + 0x1098064, 4), "avd-mbox-64", TraceMode.SYNC, self.r_AVD_MBOX_0064, self.evt_rw_hook)
-
-    def w_AVD_MBOX_INIT(self, val):
-        if (int(val.value) == 0xe):
-            self.state_active = True
-            #self.hv.trace_range(irange(AVD_BASE + 0x1080000, 0x18000), mode=TraceMode.SYNC)
-            #self.add_iova_tracer(stream=1, start=0x4000, size=0xb00)
 
     def poll(self):
         self.mon.poll()
@@ -90,18 +85,39 @@ class AVDTracer(Tracer):
 
     def w_AVD_MBOX_0054(self, x):
         if ((x.data >= 0x1080000) and (x.data <= 0x10a0000)):
-            self.log("sent fw command at 0x%x" % (x.data))
+            self.log("Sent fw command at 0x%x" % (x.data))
+            self.poll()
             cmd = self.read_regs(self.base + x.data, 0x60)
             chexdump32(cmd)
-            frame_params_iova = self.p.read32(self.base + x.data + 0x8)
-            if (frame_params_iova != 0x0):
-                t = datetime.datetime.now().isoformat()
-                frame_params = self.dart.ioread(1, frame_params_iova, 0xb0000)
-                outdir = os.path.join("data", self.outdir)
-                os.makedirs(outdir, exist_ok=True)
-                open(os.path.join(outdir, f'frame.{t}.{hex(frame_params_iova)}.bin'), "wb").write(frame_params)
-                #open(os.path.join(outdir, f'idr.{t}.{hex(frame_params_iova)}.bin'), "wb").write(self.dart.ioread(0, 0x744000, 0x4000))
-            self.poll()
+
+            opcode = struct.unpack("<I", cmd[:4])[0] & 0xf
+            if (opcode == 0):
+                self.log("Command start")
+                self.state_active = True
+                self.access_idx = 0
+                #self.dart_tracer.trace_range(0, irange(0x4000, 0x4800))
+
+            elif (opcode == 1):
+                frame_params_iova = self.p.read32(self.base + x.data + 0x8)
+                if (self.outdir) and (frame_params_iova != 0x0):
+                    t = datetime.datetime.now().isoformat()
+                    frame_params = self.dart.ioread(1, frame_params_iova, 0xb0000)
+                    outdir = os.path.join("data", self.outdir)
+                    os.makedirs(outdir, exist_ok=True)
+                    open(os.path.join(outdir, f'frame.{t}.{frame_params_iova:08x}.bin'), "wb").write(frame_params)
+                    #open(os.path.join(outdir, f'slice.{t}.{hex(frame_params_iova)}.bin'), "wb").write(self.dart.ioread(0, 0x774000, 0x4000))
+
+                    idx = self.access_idx % 4
+                    iova = [0x4000, 0xc000, 0x14000, 0x1c000][idx]
+                    open(os.path.join(outdir, f'probs.{t}.{frame_params_iova:08x}.{iova:08x}.bin'), "wb").write(self.dart.ioread(0, iova, 0x4000))
+                    #raise ValueError("break")
+                self.access_idx += 1
+
+            elif (opcode == 2):
+                self.log("Command end")
+                self.state_active = False
+                self.access_idx = 0
+                #self.hv.del_tracer(pzone, "DARTVATracer")
 
     def r_AVD_MBOX_0064(self, x):
         if ((x.data >= 0x1080000) and (x.data <= 0x10a0000)):
@@ -125,14 +141,19 @@ class AVDTracer(Tracer):
                 data += d
             return data
 
+    def dump_all(self, start=0x4000, end=0x904000, stream=0):
+        d = self.read_iova(start, end, stream=stream)
+        open(f'data/dump.{t}.{hex(frame_params_iova)}.bin', "wb").write(d)
+
+    def save_firmware(self, path="fw.bin"):
+        firmware = self.read_regs(AVD_BASE + 0x1080000, 0x10000)
+        open(path, "wb").write(firmware)
+
 p.pmgr_adt_clocks_enable('/arm-io/dart-avd')
 p.pmgr_adt_clocks_enable('/arm-io/avd')
-dart_tracer = DARTTracer(hv, "/arm-io/dart-avd", verbose=0)
+dart_tracer = DARTTracer(hv, "/arm-io/dart-avd", verbose=3)
 dart_tracer.start()
 dart = dart_tracer.dart
 
 tracer = AVDTracer(hv, '/arm-io/avd', dart_tracer, verbose=3)
-#tracer.start()
-
-trace_device("/arm-io/avd", mode=TraceMode.SYNC)
-trace_range(irange(AVD_BASE + 0x1080000, 0x18000), False)
+tracer.start()

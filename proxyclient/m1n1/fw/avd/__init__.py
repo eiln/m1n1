@@ -2,6 +2,7 @@
 from ...hw.dart import DART
 from ...proxyutils import RegMonitor
 from ...utils import *
+from .decoder import AVDDecoder
 
 import contextlib
 import struct
@@ -31,7 +32,7 @@ class AVDDevice:
             #(0x108c000, 0xc000, "cmd"),
             #(0x1098000, 0x4000, "mbox"),
             #(0x10a3000, 0x1000, "unka"),
-            #(0x1100000, 0xc000, "decode"),
+            #(0x1100000, 0xc000, "dec"),
             (0x110c000, 0x4000, "dma"),
             #(0x1400000, 0x4000, "wrap"),
         ]
@@ -57,11 +58,17 @@ class AVDDevice:
         iomon1.readmem = readmem_iova1
         self.iomon = iomon
         self.iomon1 = iomon1
+        self.stfu = False
+        self.decoder = AVDDecoder(self)
 
     def log(self, x): print(f"[AVD] {x}")
+    def poll(self): self.mon.poll()
 
     def avd_r32(self, off): return self.p.read32(self.base + off)
-    def avd_w32(self, off, x): return self.p.write32(self.base + off, x)
+    def avd_w32(self, off, x):
+        if (not self.stfu):
+            self.log("w32(0x%x, 0x%x)" % (off, x))
+        return self.p.write32(self.base + off, x)
     def avd_r64(self, off): return self.p.read64(self.base + off)
     def avd_w64(self, off, x): return self.p.write64(self.base + off, x)
     def avd_wbuf(self, off, buf):
@@ -80,6 +87,26 @@ class AVDDevice:
             self.wrap_ctrl_device_init()
             self.avd_dma_tunables_stage0()
             self.poll()
+
+    def avd_mcpu_start(self):
+        avd_r32 = self.avd_r32; avd_w32 = self.avd_w32
+        avd_w32(0x1098008, 0xe) # this + 0x30
+        avd_w32(0x1098010, 0x0) # this + 0x34
+        avd_w32(0x1098048, 0x0) # this + 0x38
+
+        avd_w32(0x1098010, 0x0) # this + 0x34
+        avd_w32(0x1098048, 0x0) # this + 0x38
+
+        avd_w32(0x1098050, 0x1) # this + 0x44
+        avd_w32(0x1098068, 0x1) # this + 0x50
+        avd_w32(0x109805c, 0x1) # this + 0x5c
+        avd_w32(0x1098074, 0x1) # this + 0x68
+
+        avd_w32(0x1098010, 0x2) # this + 0x34; enable mailbox interrupts
+        avd_w32(0x1098048, 0x8) # this + 0x38; enable mailbox interrupts
+        avd_w32(0x1098008, 0x1) # this + 0x30
+        assert((avd_r32(0x1098090) == 0x1))
+        self.avd_w32(0x1400014, 0x0)
 
     def mcpu_boot(self, fw):
         if (isinstance(fw, str)):
@@ -104,28 +131,6 @@ class AVDDevice:
             for n,arg in enumerate(vals[:8]):
                 self.avd_w32(offset + (n*4) - self.base, int(arg, 16))
         self.avd_w32(0x1098054, 0x108eb30)
-
-    def poll(self):
-        self.mon.poll()
-
-    def avd_mcpu_start(self):
-        avd_r32 = self.avd_r32; avd_w32 = self.avd_w32
-        avd_w32(0x1098008, 0xe) # this + 0x30
-        avd_w32(0x1098010, 0x0) # this + 0x34
-        avd_w32(0x1098048, 0x0) # this + 0x38
-
-        avd_w32(0x1098010, 0x0) # this + 0x34
-        avd_w32(0x1098048, 0x0) # this + 0x38
-
-        avd_w32(0x1098050, 0x1) # this + 0x44
-        avd_w32(0x1098068, 0x1) # this + 0x50
-        avd_w32(0x109805c, 0x1) # this + 0x5c
-        avd_w32(0x1098074, 0x1) # this + 0x68
-
-        avd_w32(0x1098010, 0x2) # this + 0x34; enable mailbox interrupts
-        avd_w32(0x1098048, 0x8) # this + 0x38; enable mailbox interrupts
-        avd_w32(0x1098008, 0x1) # this + 0x30
-        #assert((avd_r32(0x1098090) == 0x1))
 
     def wrap_ctrl_device_init(self):
         avd_w32 = self.avd_w32
