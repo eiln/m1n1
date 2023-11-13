@@ -2,7 +2,7 @@
 from ...hw.dart import DART
 from ...proxyutils import RegMonitor
 from ...utils import *
-from .decoder import AVDDecoder
+from .decoder import *
 
 import contextlib
 import struct
@@ -32,7 +32,7 @@ class AVDDevice:
             #(0x108c000, 0xc000, "cmd"),
             #(0x1098000, 0x4000, "mbox"),
             #(0x10a3000, 0x1000, "unka"),
-            #(0x1100000, 0xc000, "dec"),
+            (0x1100000, 0xc000, "dec"),
             (0x110c000, 0x4000, "dma"),
             #(0x1400000, 0x4000, "wrap"),
         ]
@@ -59,7 +59,7 @@ class AVDDevice:
         self.iomon = iomon
         self.iomon1 = iomon1
         self.stfu = False
-        self.decoder = AVDDecoder(self)
+        self.decoder = AVDDec(self)
 
     def log(self, x): print(f"[AVD] {x}")
     def poll(self): self.mon.poll()
@@ -86,7 +86,7 @@ class AVDDevice:
         with contextlib.redirect_stdout(None):
             self.wrap_ctrl_device_init()
             self.avd_dma_tunables_stage0()
-            self.poll()
+        self.poll()
 
     def avd_mcpu_start(self):
         avd_r32 = self.avd_r32; avd_w32 = self.avd_w32
