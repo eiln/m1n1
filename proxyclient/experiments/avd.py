@@ -7,29 +7,53 @@ sys.path.append("/home/eileen/asahi/avd")
 from m1n1.setup import *
 from m1n1.utils import *
 from m1n1.fw.avd import *
-
-from avid.h264.decoder import AVDH264Decoder
-from avid.vp9.decoder import AVDVP9Decoder
+from tools.common import ffprobe
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', type=str, required=True)
+    parser.add_argument('-n', '--num', type=int, default=1, help="count")
+    parser.add_argument('-a', '--all', action='store_true', help="run all")
+    parser.add_argument('-x', '--stfu', action='store_true')
+    parser.add_argument('-p', '--poll', action='store_true', help="iommu poll")
     args = parser.parse_args()
+    mode = ffprobe(args.input)
 
-    dec = AVDH264Decoder()
-    dec.stfu = True
-    dec.hal.stfu = True
+    if   (mode == "h264"):
+        from avid.h264.decoder import AVDH264Decoder
+        dec = AVDH264Decoder()
+    elif (mode == "h265"):
+        from avid.h265.decoder import AVDH265Decoder
+        dec = AVDH265Decoder()
+    elif (mode == "vp09"):
+        from avid.vp9.decoder import AVDVP9Decoder
+        dec = AVDVP9Decoder()
+    else:
+        raise RuntimeError("unsupported codec")
+    if (args.stfu):
+        dec.stfu = True
+        dec.hal.stfu = True
     units = dec.setup(args.input)
 
     avd = AVDDevice(u)
-    avd.decoder = AVDH264Dec(avd)
-    avd.stfu = True
-    avd.boot()
-    avd.ioalloc_at(0x0, 0xf000000, stream=0)
-    #avd.iomon.add(0x0, 0xf000000)
-
+    if   (mode == "h264"):
+        avd.decoder = AVDH264Dec(avd)
+    elif (mode == "h265"):
+        avd.decoder = AVDH265Dec(avd)
+    elif (mode == "vp09"):
+        avd.decoder = AVDVP9Dec(avd)
+    else:
+        raise RuntimeError("unsupported codec")
     avd.decoder.winname = args.input
-    for i,unit in enumerate(units[:3]):
+    if (args.stfu):
+        avd.stfu = True
+    avd.boot()
+    avd.ioalloc_at(0x0, 0xf00000, stream=0)
+    if (args.poll):
+        avd.iomon.add(0x0, 0xf00000)
+
+    num = len(units) if args.all else min(args.num, len(units))
+    for i,unit in enumerate(units[:num]):
         print(unit)
         inst = dec.decode(unit)
         avd.decoder.decode(dec.ctx, unit, inst)
