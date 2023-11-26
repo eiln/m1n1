@@ -52,7 +52,7 @@ class AVDDec:
         yuv = np.stack((y, u2, v2), axis=-1)
         return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
 
-    def set_insn(self, x, sl):
+    def set_insn(self, x):
         raise ValueError()
 
     def set_payload(self, ctx, sl):
@@ -78,7 +78,8 @@ class AVDDec:
         self.set_payload(ctx, sl)
         self.setup_dma(ctx, sl)
         for x in inst_stream:
-            self.set_insn(x, sl)
+            v = x if isinstance(x, int) else x.val
+            self.set_insn(v)
         self.get_disp_frame(ctx, sl)
         assert(self.avd.avd_r32(0x1104060) == 0x2842108)
         img = self.get_nv12_disp_frame(ctx)
@@ -89,8 +90,8 @@ class AVDH265Dec(AVDDec):
     def __init__(self, avd):
         super().__init__(avd)
 
-    def set_insn(self, x, sl):
-        self.avd.avd_w32(0x1104004, x.val)
+    def set_insn(self, x):
+        self.avd.avd_w32(0x1104004, x)
 
     def set_payload(self, ctx, sl):
         self.avd.iowrite(ctx.slice_data_addr, sl.get_payload(), stream=0)
@@ -124,8 +125,8 @@ class AVDH264Dec(AVDDec):
     def __init__(self, avd):
         super().__init__(avd)
 
-    def set_insn(self, x, sl):
-        self.avd.avd_w32(0x110400c, x.val)
+    def set_insn(self, x):
+        self.avd.avd_w32(0x110400c, x)
 
     def set_payload(self, ctx, sl):
         self.avd.iowrite(ctx.slice_data_addr, sl.get_payload(), stream=0)
@@ -169,8 +170,8 @@ class AVDVP9Dec(AVDDec):
     def __init__(self, avd):
         super().__init__(avd)
 
-    def set_insn(self, x, sl):
-        self.avd.avd_w32(0x1104010, x.val)
+    def set_insn(self, x):
+        self.avd.avd_w32(0x1104010, x)
 
     def set_payload(self, ctx, sl):
         self.avd.iowrite(ctx.slice_data_addr, sl.get_payload(), stream=0)
