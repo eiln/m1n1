@@ -36,7 +36,7 @@ class AVDDec:
             avd_w32(0x1104048, 0x0)
         if (sl.mode == "vp09"):
             x = 0x38000
-            avd_w32(0x1104048, 0x0)
+            avd_w32(0x110404c, 0x0)
         avd_w32(0x110405c, avd_r32(0x110405c) | x)
         self.avd.poll()
 
