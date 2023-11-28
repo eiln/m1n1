@@ -16,6 +16,8 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--all', action='store_true', help="run all")
     parser.add_argument('-x', '--stfu', action='store_true')
     parser.add_argument('-p', '--poll', action='store_true', help="iommu poll")
+    parser.add_argument('--save-raw', type=str, default="", help="file name to save raw yuv")
+    parser.add_argument('--save-images', type=str, default="", help="dirname to save images")
     args = parser.parse_args()
     mode = ffprobe(args.input)
 
@@ -33,7 +35,8 @@ if __name__ == "__main__":
     if (args.stfu):
         dec.stfu = True
         dec.hal.stfu = True
-    units = dec.setup(args.input)
+    nal_stop = 0 if args.all else 1
+    units = dec.setup(args.input, nal_stop=nal_stop, num=args.num)
 
     avd = AVDDevice(u)
     if   (mode == "h264"):
@@ -48,12 +51,24 @@ if __name__ == "__main__":
     if (args.stfu):
         avd.stfu = True
     avd.boot()
-    avd.ioalloc_at(0x0, 0xf00000, stream=0)
-    if (args.poll):
-        avd.iomon.add(0x0, 0xf00000)
 
+    rawvideo = b''
     num = len(units) if args.all else min(args.num, len(units))
     for i,unit in enumerate(units[:num]):
         print(unit)
         inst = dec.decode(unit)
-        avd.decoder.decode(dec.ctx, unit, inst)
+        if (i == 0):
+            avd.ioalloc_at(0x0, dec.allocator_top(), stream=0, val=0)
+            if (args.poll):
+                avd.iomon.add(0x0, dec.allocator_top())
+        frame = avd.decoder.decode(dec.ctx, unit, inst)
+        if (frame != None):
+            if (args.save_raw):
+                rawvideo += frame.y_data + frame.uv_data
+            if (args.save_images):
+                os.makedirs(f"data/out/{args.save_images}", exist_ok=True)
+                path = os.path.join(f"data/out/{args.save_images}", "out%03d.png" % (self.count))
+                cv2.imwrite(path, frame.img)
+    if (args.save_raw):
+        path = os.path.join(f"data/out/{args.save_raw}")
+        open(path, "wb").write(rawvideo)
