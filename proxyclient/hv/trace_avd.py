@@ -5,6 +5,64 @@ from m1n1.utils import *
 from m1n1.proxyutils import RegMonitor
 hv.p.hv_set_time_stealing(0, 1)
 
+# AVD tracer Usage
+#
+# 2023/12/25: Only tested on J293AP (AVD revision Viola/V3).
+#
+# 1. Start tracer under the hypervisor
+#
+# 2. Send over the bitstream(s) to the target machine
+#    Supported formats: .264, .265, .ivf (unless you want to add a demuxer to avid/codecs)
+#
+# 3. The tracer is purposely not activated at boot. As of 13.5, it takes ~2 HEVC runs
+#    to get to the login screen - it's probably decoding the login screen. By "activate",
+#    I mean the tracer variable "outdir" is NULLed s.t. the tracer will not save the
+#    traced data and merely log the IPC transactions.
+#
+#       [cpu0] [AVDTracer@/arm-io/avd] sent fw command at 0x108eb30
+#       00000000  00000801 00030007 0050c000 000002a8 00000003 01091a70 01091a78 00000001
+#       00000020  0050caa4 01091af0 01091bc0 01091c50 0050c2a4 0050c210 0050c28c 00000000
+#       00000040  00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+#       [cpu0] [0xfffffe00149d9984] MMIO: W.4   0x269098054 (avd[0], offset 0x1098054) = 0x108eb30
+#       [cpu7] [0xfffffe00149d99b0] MMIO: R.4   0x269098048 (avd[0], offset 0x1098048) = 0x9
+#
+# 4. To save the trace contents, break into the hypervisor console and set
+#
+#       >>> tracer.outdir = "crowd_run_1080X512_fr30_bd8_8buf_l3"
+#
+#    The output data dir will become 'data/[inferred codec name]/$outdir'.
+#    The data dir will be created if it does not exist. The directory structure is
+#    meant to look like this:
+#
+#    proxyclient/
+#       data/
+#          h264/*
+#          h265/*
+#          vp9/*
+#
+# 5. After the directory name is configured, trigger avd from the target machine:
+#
+#       ffmpeg -hwaccel videotoolbox -i crowd_run_1080X512_fr30_bd8_8buf_l3.ivf
+#
+#    Or you can access VT directly yourself with some Obj-C (but why would you want to do that..)
+#    Though I may need to do that to test some sekrit undocumented features.
+#    The input bitstream is hopefully the matching one as the directory name just set.
+#
+# 6. If all goes well (i.e. the bitstream is decoding on AVD), the tracer will save:
+#
+#       >> ~/m1n1/proxyclient $ ls data/*
+#       data/vp9/crowd_run_1080X512_fr30_bd8_8buf_l3:
+#       frame.2023-12-17T21:17:47.519048.00004000.bin  probs.2023-12-17T21:17:47.519048.00004000.00004000.bin
+#       frame.2023-12-17T21:17:47.578537.000bc000.bin  probs.2023-12-17T21:17:47.578537.000bc000.0000c000.bin
+#       frame.2023-12-17T21:17:47.633768.00174000.bin  probs.2023-12-17T21:17:47.633768.00174000.00014000.bin
+#       frame.2023-12-17T21:17:47.688067.0022c000.bin  probs.2023-12-17T21:17:47.688067.0022c000.0001c000.bin
+#
+#   The "frame" is the macOS source frame_params struct, and this directory is the
+#   one intended to be supplied to all the avid tools (e.g. emulator, differs).
+#   For VP9 (and presumably AV1) the tracer will additionally save the "probs" blob.
+#   You can also bypass FairPlay encryption and save the coded bitstream, but that's
+#   an exercise left for the reader.
+
 import datetime
 import os
 import struct

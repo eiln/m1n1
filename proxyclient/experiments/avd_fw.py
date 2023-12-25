@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 import sys, pathlib, argparse
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-sys.path.append("/home/eileen/asahi/avd")
+sys.path.append("/home/eileen/asahi/avd")  # git clone https://github.com/eiln/avd.git
+# Decode via AVD Cortex-M3 firmware
 
 from m1n1.setup import *
 from m1n1.utils import *
@@ -19,7 +20,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-f','--firmware', type=str, default="data/fw.bin", help="path to CM3 firmware")
 	parser.add_argument('-i','--input', type=str, required=True, help="path to CM3 firmware")
-	parser.add_argument('-d','--dir', type=str, required=True, help="frame_params trace directory")
+	parser.add_argument('-d','--dir', type=str, required=True, help="frame_params trace dir")
 	parser.add_argument('-p','--prefix', type=str, default="data", help="directory prefix")
 	args = parser.parse_args()
 

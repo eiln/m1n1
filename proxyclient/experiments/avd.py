@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 import sys, pathlib, argparse
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-sys.path.append("/home/eileen/asahi/avd")
+sys.path.append("/home/eileen/asahi/avd")  # git clone https://github.com/eiln/avd.git
+# Decode with our own generated instruction stream
 
 from m1n1.setup import *
 from m1n1.utils import *
@@ -11,11 +12,22 @@ from tools.common import ffprobe
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', type=str, required=True)
-    parser.add_argument('-n', '--num', type=int, default=1, help="count")
-    parser.add_argument('-a', '--all', action='store_true', help="run all")
+    #
+    # Usage:
+    #     ffmpeg -i input.mp4 -c:v copy (or reencode libx264) input.264
+    #     python3 experiments/avd.py -i input.264 -a
+    #
+    # - Supports .264, .265, and .ivf formats.
+    # - Regarding the codec, it's whatever codec features are supported.
+    #   Check avid for details.
+    # - Also ensure to change the sys.path.append above to the avid repo
+    #   as it does not install system-wide.
+    #
+    parser.add_argument('-i', '--input', type=str, required=True, help="path to input bitstream")
+    parser.add_argument('-n', '--num', type=int, default=1, help="frame count")
+    parser.add_argument('-a', '--all', action='store_true', help="run all frames")
     parser.add_argument('-x', '--stfu', action='store_true')
-    parser.add_argument('-p', '--poll', action='store_true', help="iommu poll")
+    parser.add_argument('-p', '--poll', action='store_true', help="poll iommu space")
     parser.add_argument('--save-raw', type=str, default="", help="file name to save raw yuv")
     parser.add_argument('--save-images', type=str, default="", help="dirname to save images")
     args = parser.parse_args()
