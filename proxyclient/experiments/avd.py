@@ -67,7 +67,7 @@ if __name__ == "__main__":
                 rawvideo += frame.y_data + frame.uv_data
             if (args.save_images):
                 os.makedirs(f"data/out/{args.save_images}", exist_ok=True)
-                path = os.path.join(f"data/out/{args.save_images}", "out%03d.png" % (self.count))
+                path = os.path.join(f"data/out/{args.save_images}", "out%03d.png" % (avd.decoder.count))
                 cv2.imwrite(path, frame.img)
     if (args.save_raw):
         path = os.path.join(f"data/out/{args.save_raw}")
