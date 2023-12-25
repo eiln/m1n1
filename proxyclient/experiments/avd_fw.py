@@ -56,10 +56,8 @@ if __name__ == "__main__":
 		avd.iomon.poll()
 		avd.avd_wbuf(emu.get_cmd_addr(n+1), cmd)
 		avd.avd_w32(0x1098054, emu.get_cmd_addr(n+1))
-		time.sleep(0.5)
 		avd.poll()
 		avd.iomon.poll()
 		img = avd.decoder.get_nv12_disp_frame(dec.ctx)
 		cv2.imshow(avd.decoder.winname, img); cv2.waitKey(100)
-		open("data/x%d.bin" % n, "wb").write(avd.ioread(0x0, 0xff0000))
-		break
+		#open("data/x%d.bin" % n, "wb").write(avd.ioread(0x0, 0xff0000))

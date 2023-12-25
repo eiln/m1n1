@@ -13,13 +13,13 @@ from tools.common import ffprobe
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', type=str, required=True)
-    parser.add_argument('-d', '--dir', type=str, required=True)
-    parser.add_argument('-f', '--firmware', type=str, default="data/fw.bin")
+    parser.add_argument('-i', '--input', type=str, required=True, help="input bitstream")
+    parser.add_argument('-d', '--dir', type=str, required=True, help="path to trace dir")
+    parser.add_argument('-f', '--firmware', type=str, default="data/fw.bin", help="path to fw")
     parser.add_argument('-n', '--num', type=int, default=1, help="count")
     parser.add_argument('-a', '--all', action='store_true', help="run all")
     parser.add_argument('-x', '--stfu', action='store_true')
-    parser.add_argument('-p', '--poll', action='store_true', help="iommu poll")
+    parser.add_argument('-p', '--poll', action='store_true', help="poll iommu space")
     parser.add_argument('--save-raw', action='store_true', help="save raw yuv")
     args = parser.parse_args()
     mode = ffprobe(args.input)
@@ -75,4 +75,4 @@ if __name__ == "__main__":
         if (args.save_raw):
             y_data = avd.ioread(dec.ctx.y_addr, dec.ctx.luma_size, stream=0)
             uv_data = avd.ioread(dec.ctx.uv_addr, dec.ctx.chroma_size, stream=0)
-            open("data/chunk2/%03d.bin" % (i), "wb").write(y_data + uv_data)
+            open("data/raw-emu/%03d.bin" % (i), "wb").write(y_data + uv_data)
