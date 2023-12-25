@@ -102,17 +102,23 @@ class AVDTracer(Tracer):
                 if (self.outdir) and (frame_params_iova != 0x0):
                     t = datetime.datetime.now().isoformat()
                     frame_params = self.dart.ioread(1, frame_params_iova, 0xb0000)
-                    outdir = os.path.join("data", self.outdir)
-                    os.makedirs(outdir, exist_ok=True)
-                    open(os.path.join(outdir, f'frame.{t}.{frame_params_iova:08x}.bin'), "wb").write(frame_params)
-                    #open(os.path.join(outdir, f'slice.{t}.{hex(frame_params_iova)}.bin'), "wb").write(self.dart.ioread(0, 0x774000, 0x4000))
 
                     word = self.p.read32(self.base + x.data)
-                    if (word & 0x800) == 0x800: # vp9
-                        idx = self.access_idx % 4
-                        iova = [0x4000, 0xc000, 0x14000, 0x1c000][idx]
+                    if   (word & 0x000) == 0x000: # h265
+                        name = "h265"
+                    elif (word & 0x400) == 0x400: # h264
+                        name = "h264"
+                    elif (word & 0x800) == 0x800: # vp9
+                        name = "vp9"
+                    else:
+                        name = "unk"
+                    outdir = os.path.join("data", name, self.outdir)
+                    os.makedirs(outdir, exist_ok=True)
+                    open(os.path.join(outdir, f'frame.{t}.{frame_params_iova:08x}.bin'), "wb").write(frame_params)
+
+                    if (word & 0x800) == 0x800: # save probs for vp9
+                        iova = [0x4000, 0xc000, 0x14000, 0x1c000][self.access_idx % 4]
                         open(os.path.join(outdir, f'probs.{t}.{frame_params_iova:08x}.{iova:08x}.bin'), "wb").write(self.dart.ioread(0, iova, 0x4000))
-                    #raise ValueError("break")
                 self.access_idx += 1
 
             elif (opcode == 2):
