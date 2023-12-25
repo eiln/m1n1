@@ -55,8 +55,6 @@ class AVDTracer(Tracer):
                 print(e)
                 return None
         iomon1.readmem = readmem_iova
-        #iomon.add(0x2c000, 0x4000, "dart-0x2c000")
-        #iomon.add(0x774000, 0x100, "dart-0x774000")
         self.iomon = iomon
         self.iomon1 = iomon1
         self.state_active = False
@@ -93,7 +91,6 @@ class AVDTracer(Tracer):
                 self.log("Command start")
                 self.state_active = True
                 self.access_idx = 0
-                #self.dart_tracer.trace_range(0, irange(0x4000, 0x4800))
 
             elif (opcode == 1):
                 frame_params_iova = self.p.read32(self.base + x.data + 0x8)
@@ -123,7 +120,6 @@ class AVDTracer(Tracer):
                 self.log("Command end")
                 self.state_active = False
                 self.access_idx = 0
-                #self.hv.del_tracer(pzone, "DARTVATracer")
 
     def r_AVD_MBOX_0064(self, x):
         if ((x.data >= 0x1080000) and (x.data <= 0x10a0000)):
@@ -147,19 +143,14 @@ class AVDTracer(Tracer):
                 data += d
             return data
 
-    def dump_all(self, start=0x4000, end=0x904000, stream=0):
-        d = self.read_iova(start, end, stream=stream)
-        open(f'data/dump.{t}.{hex(frame_params_iova)}.bin', "wb").write(d)
-
     def save_firmware(self, path="fw.bin"):
         firmware = self.read_regs(self.base + 0x1080000, 0x10000)
         open(path, "wb").write(firmware)
 
 p.pmgr_adt_clocks_enable('/arm-io/dart-avd')
 p.pmgr_adt_clocks_enable('/arm-io/avd')
-dart_tracer = DARTTracer(hv, "/arm-io/dart-avd", verbose=3)
+dart_tracer = DARTTracer(hv, "/arm-io/dart-avd", verbose=0)
 dart_tracer.start()
 dart = dart_tracer.dart
-
 tracer = AVDTracer(hv, '/arm-io/avd', dart_tracer, verbose=3)
 tracer.start()
