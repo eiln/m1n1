@@ -10,21 +10,6 @@ import os
 import struct
 import time
 
-AVD_BASE = 0x268000000
-AVD_REGS = [
-    #(0x1000000, 0x4000, "unk0"),
-    #(0x1010000, 0x4000, "dart"),
-    #(0x1002000, 0x1000, "unk2"),
-    (0x1070000, 0x4000, "piodma"),
-    (0x1088000, 0x4000, "sram"),
-    (0x108c000, 0xc000, "cmd"),
-    #(0x1098000, 0x4000, "mbox"),
-    #(0x10a3000, 0x1000, "unka"),
-    (0x1100000, 0xc000, "config"),
-    (0x110c000, 0x4000, "dma"),
-    #(0x1400000, 0x4000, "wrap"),
-]
-
 class AVDTracer(Tracer):
     DEFAULT_MODE = TraceMode.SYNC
 
@@ -38,6 +23,19 @@ class AVDTracer(Tracer):
         self.dart = dart_tracer.dart
 
         mon = RegMonitor(hv.u)
+        AVD_REGS = [
+            #(0x1000000, 0x4000, "unk0"),
+            #(0x1010000, 0x4000, "dart"),
+            #(0x1002000, 0x1000, "unk2"),
+            (0x1070000, 0x4000, "piodma"),
+            (0x1088000, 0x4000, "sram"),
+            (0x108c000, 0xc000, "cmd"),
+            #(0x1098000, 0x4000, "mbox"),
+            #(0x10a3000, 0x1000, "unka"),
+            (0x1100000, 0xc000, "config"),
+            (0x110c000, 0x4000, "dma"),
+            #(0x1400000, 0x4000, "wrap"),
+        ]
         #for (offset, size, name) in AVD_REGS: mon.add(self.base + offset, size, name=name)
         self.mon = mon
 
@@ -71,7 +69,7 @@ class AVDTracer(Tracer):
 
     def start(self):
         self.hv.trace_range(irange(self.dev.get_reg(0)[0], self.dev.get_reg(0)[1]), mode=TraceMode.SYNC)
-        self.hv.trace_range(irange(AVD_BASE + 0x1080000, 0x18000), False)
+        self.hv.trace_range(irange(self.base + 0x1080000, 0x18000), False)
         self.hv.add_tracer(irange(self.base + 0x1098054, 4), "avd-mbox-54", TraceMode.SYNC, self.evt_rw_hook, self.w_AVD_MBOX_0054)
         self.hv.add_tracer(irange(self.base + 0x1098064, 4), "avd-mbox-64", TraceMode.SYNC, self.r_AVD_MBOX_0064, self.evt_rw_hook)
 
@@ -154,7 +152,7 @@ class AVDTracer(Tracer):
         open(f'data/dump.{t}.{hex(frame_params_iova)}.bin', "wb").write(d)
 
     def save_firmware(self, path="fw.bin"):
-        firmware = self.read_regs(AVD_BASE + 0x1080000, 0x10000)
+        firmware = self.read_regs(self.base + 0x1080000, 0x10000)
         open(path, "wb").write(firmware)
 
 p.pmgr_adt_clocks_enable('/arm-io/dart-avd')
