@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: MIT
 
-from m1n1.trace import Tracer
 from m1n1.trace.dart import DARTTracer
 from m1n1.trace.asc import ASCTracer, EP, EPState, msg, msg_log, DIR, EPContainer
 from m1n1.utils import *
@@ -8,11 +7,13 @@ from m1n1.constructutils import *
 from m1n1.fw.afk.rbep import *
 from m1n1.fw.afk.epic import *
 from m1n1.fw.aop import *
+from m1n1.fw.aop.afkrb import *
+from m1n1.fw.aop.base import *
 from m1n1.fw.aop.ipc import *
 
 import sys
 
-class AFKRingBufSniffer(AFKRingBuf):
+class AFKRingBufSniffer(AOPAFKRingBuf):
     def __init__(self, ep, state, base, size):
         super().__init__(ep, base, size)
         self.state = state
@@ -23,9 +24,6 @@ class AFKRingBufSniffer(AFKRingBuf):
 
     def update_wptr(self):
         raise NotImplementedError()
-
-    def get_wptr(self):
-        return struct.unpack("<I", self.read_buf(2 * self.BLOCK_SIZE, 4))[0]
 
     def read_buf(self, off, size):
         return self.ep.dart.ioread(0, self.base + off, size)
@@ -81,12 +79,11 @@ class AFKEp(EP):
     def Send(self, msg):
         for data in self.txbuf.read():
             #if self.state.verbose >= 3:
-            if True:
-                self.log(f"===TX DATA=== epid={self.epid} rptr={self.txbuf.state.rptr:#x}")
+            if getattr(self, 'VERBOSE', False):
+                self.log(f"===TX DATA=== epid={self.epid:x} rptr={self.txbuf.state.rptr:#x}")
                 chexdump(data)
                 self.log(f"===END DATA===")
                 self.log("Backtrace on TX data:")
-                self.hv.bt()
             self.handle_ipc(data, dir=">")
         return True
 
@@ -96,10 +93,11 @@ class AFKEp(EP):
     def Recv(self, msg):
         for data in self.rxbuf.read():
             #if self.state.verbose >= 3:
-            if True:
-                self.log(f"===RX DATA=== epid={self.epid} rptr={self.rxbuf.state.rptr:#x}")
+            if getattr(self, 'VERBOSE', False):
+                self.log(f"===RX DATA=== epid={self.epid:x} rptr={self.rxbuf.state.rptr:#x}")
                 chexdump(data)
                 self.log(f"===END DATA===")
+                #self.hv.bt()
             self.handle_ipc(data, dir="<")
         return True
 
@@ -170,16 +168,16 @@ class EPICEp(AFKEp):
             return self.handle_reply(hdr, sub, fd)
 
     def handle_ipc(self, data, dir=None):
+        if not getattr(self, 'VERBOSE', False):
+            return
+
         fd = BytesIO(data)
         hdr = EPICHeader.parse_stream(fd)
         sub = EPICSubHeaderVer2.parse_stream(fd)
 
-        if not getattr(self, 'VERBOSE', False):
-            return
-
         self.log(f"{dir} 0x{hdr.channel:x} Type {hdr.type} Ver {hdr.version} Tag {hdr.seq}")
         self.log(f"  Len {sub.length} Ver {sub.version} Cat {sub.category} Type {sub.type:#x} Ts {sub.timestamp:#x}")
-        self.log(f"  Unk1 {sub.unk1:#x} Unk2 {sub.unk2:#x}")
+        #self.log(f"  Unk1 {sub.unk1:#x} Unk2 {sub.unk2:#x}")
 
         if self.dispatch_ipc(dir, hdr, sub, fd):
             return
@@ -196,7 +194,7 @@ class EPICEp(AFKEp):
         call.dump(self.log)
 
 class SPUAppEp(EPICEp):
-    SHORT = "SPUApp"
+    SHORT = "spu"
 
 class AccelEp(EPICEp):
     SHORT = "accel"
@@ -205,7 +203,8 @@ class GyroEp(EPICEp):
     SHORT = "gyro"
 
 class LASEp(EPICEp):
-    SHORT = "las"
+    SHORT = "als"
+    VERBOSE = True
 
 class WakeHintEp(EPICEp):
     SHORT = "wakehint"
@@ -214,12 +213,11 @@ class UNK26Ep(EPICEp):
     SHORT = "unk26"
 
 class AudioEp(EPICEp):
-    SHORT = "aop-audio"
-    VERBOSE = True
+    SHORT = "audio"
+    #VERBOSE = True
 
 class VoiceTriggerEp(EPICEp):
-    SHORT = "aop-voicetrigger"
-    VERBOSE = True
+    SHORT = "voicetrigger"
 
 
 class AOPTracer(ASCTracer, AOPBase):
@@ -238,7 +236,7 @@ class AOPTracer(ASCTracer, AOPBase):
         self.default_bootargs = None
         super().__init__(hv, devpath, verbose)
         self.u = hv.u
-        AOPBase.__init__(self, hv.u, self.dev)
+        AOPBase.__init__(self, hv.u)
 
     def start(self, *args):
         self.default_bootargs = self.read_bootargs()
@@ -248,6 +246,7 @@ class AOPTracer(ASCTracer, AOPBase):
         if val.RUN:
             self.bootargs = self.read_bootargs()
             self.log("Bootargs patched by AP:")
+            self.bootargs.dump(self.log)
             self.default_bootargs.dump_diff(self.bootargs, self.log)
             self.log("(End of list)")
         super().w_CPU_CONTROL(val)
@@ -326,7 +325,7 @@ class AOPTracer(ASCTracer, AOPBase):
             data, annot = readdump(l, hdr, f)
             epid = int(annot["epid"])
             epmap[epid].handle_ipc(data, dir)
-                        
+
 
 if __name__ == "__main__":
     # We can replay traces by saving the textual output of live tracing
@@ -335,15 +334,10 @@ if __name__ == "__main__":
         AOPTracer.replay(f)
     sys.exit(0)
 
-dart_aop_tracer = DARTTracer(hv, "/arm-io/dart-aop", verbose=4)
+dart_aop_tracer = DARTTracer(hv, "/arm-io/dart-aop", verbose=0)
 dart_aop_tracer.start()
-
-dart_aop_base = u.adt["/arm-io/dart-aop"].get_reg(0)[0]
-
-#hv.trace_range(irange(*u.adt["/arm-io/dart-aop"].get_reg(1)))
-#hv.trace_range(irange(*u.adt["/arm-io/aop"].get_reg(1)))
-#hv.trace_range(irange(*u.adt["/arm-io/aop"].get_reg(3)))
-#hv.trace_range(irange(*u.adt["/arm-io/admac-aop-audio"].get_reg(0)))
-
-aop_tracer = AOPTracer(hv, "/arm-io/aop", verbose=1)
+aop_tracer = AOPTracer(hv, "/arm-io/aop", verbose=4)
 aop_tracer.start(dart_aop_tracer.dart)
+node = hv.adt["/arm-io/aop"]
+for irq in getattr(node, "interrupts"):
+    hv.trace_irq(f"{node.name} {irq}", irq, 1, hv.IRQTRACE_IRQ)

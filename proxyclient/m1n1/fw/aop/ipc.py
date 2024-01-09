@@ -4,8 +4,7 @@ from io import BytesIO
 
 from m1n1.utils import FourCC, chexdump
 from m1n1.constructutils import ZPadding
-from m1n1.fw.afk.epic import EPICCmd, EPICCategory
-
+from m1n1.fw.afk.epic import *
 
 EPICSubHeaderVer2 = Struct(
     "length" / Int32ul,
@@ -17,22 +16,28 @@ EPICSubHeaderVer2 = Struct(
     "unk2" / Default(Hex(Int32ul), 0),
 )
 
+AOPEPICHeader = Struct(
+    # ringbuf header
+    # "magic" / PaddedString(4, "utf8"),
+    # "size" / Hex(Int32ul),
+    # EPIC header
+    "header" / EPICHeader,
+    "subheader" / EPICSubHeaderVer2,
+)
+
 class AOPAudioPropKey(IntEnum):
-    IS_READY = 0x01
-
-    UNK_11 = 0x11
-    PLACEMENT = 0x1e
-    UNK_21 = 0x21
-    ORIENTATION = 0x2e
-    LOCATION_ID = 0x30
-    SERIAL_NO = 0x3e
-    VENDOR_ID = 0x5a
-    PRODUCT_ID = 0x5b
-
+    IS_READY     = 0x01
+    UNK_11       = 0x11
+    PLACEMENT    = 0x1e
+    UNK_21       = 0x21
+    ORIENTATION  = 0x2e
+    LOCATION_ID  = 0x30
+    SERIAL_NO    = 0x3e
+    VENDOR_ID    = 0x5a
+    PRODUCT_ID   = 0x5b
     SERVICE_CONTROLLER = 0x64
     DEVICE_COUNT = 0x65
-
-    VERSION = 0x67
+    VERSION      = 0x67
 
 class EPICCall:
     @classmethod
@@ -155,38 +160,38 @@ class ProbeDevice(WrappedCall):
         "blank" / Const(0x0, Int32ul),
         "unk1" / Hex(Const(0xffffffff, Int32ul)),
         "calltype" / Hex(Const(0xc3000001, Int32ul)),
-        "blank2" / ZPadding(16),
-        "pad" / Padding(4),
+        "pad" / ZPadding(16),
+        "unk" / Hex(Int32ul),
         "len" / Hex(Const(0x28, Int64ul)),
         "devno" / Int32ul,
     )
     RETS = Struct(
         "retcode" / Default(Hex(Int32ul), 0),
         "devid" / FourCC,
-        "blank2" / Const(0x0, Int32ul),
-        "unk1" / Const(8, Int32ul),
-        "blank3" / Const(0x0, Int32ul),
-        "unk2" / Hex(Const(0x01_0d_1c_20, Int32ul)),
-        "blank4" / Const(0x0, Int32ul),
+        "unk0" / Default(Hex(Int32ul), 0),
+        "unk1" / Default(Hex(Int32ul), 0),
+        "blank3" / Default(Hex(Int32ul), 0),
+        "unk2" / Default(Hex(Int32ul), 0),
+        "blank4" / Default(Hex(Int32ul), 0),
         "remainder" / HexDump(GreedyBytes),
     )
 
 PDMConfig = Struct(
-    "unk1" / Int32ul,
+    "bytesPerSample" / Int32ul,
     "clockSource" / FourCC,
     "pdmFrequency" / Int32ul,
-    "unk3_clk" / Int32ul,
-    "unk4_clk" / Int32ul,
-    "unk5_clk" / Int32ul,
-    "channelPolaritySelect" / Hex(Int32ul),
-    "unk7" / Hex(Int32ul),
+    "pdmcFrequency" / Int32ul,
+    "slowClockSpeed" / Int32ul,
+    "fastClockSpeed" / Int32ul,
+    "channelPolaritySelect" / Int32ul,
+    "channelPhaseSelect" / Int32ul,
     "unk8" / Hex(Int32ul),
     "unk9" / Hex(Int16ul),
     "ratios" / Struct(
         "r1" / Int8ul,
         "r2" / Int8ul,
         "r3" / Int8ul,
-        "pad" / Default(Int8ul, 0),
+        "pad" / Const(0, Int8ul),
     ),
     "filterLengths" / Hex(Int32ul),
     "coeff_bulk" / Int32ul,
@@ -240,7 +245,7 @@ DecimatorConfig = Struct(
 PowerSetting = Struct(
     "devid" / FourCC,
     "cookie" / Int32ul,
-    "pad" / Padding(4),
+    "unk" / Default(Hex(Int32ul), 0),
     "blank" / ZPadding(8),
     "target_pstate" / FourCC,
     "unk2" / Int32ul,
@@ -270,7 +275,7 @@ class GetDeviceProp(WrappedCall):
         "unk1" / Hex(Const(0xffffffff, Int32ul)),
         "calltype" / Hex(Const(0xc3000004, Int32ul)),
         "blank2" / ZPadding(16),
-        "pad" / Padding(4),
+        "unk" / Hex(Int32ul),
         "len" / Hex(Const(0x30, Int64ul)),
         "devid" / FourCC,
         "modifier" / Int32ul,
@@ -297,7 +302,7 @@ class SetDeviceProp(WrappedCall):
         "unk1" / Hex(Const(0xffffffff, Int32ul)),
         "calltype" / Hex(Const(0xc3000005, Int32ul)),
         "blank2" / ZPadding(16),
-        "pad" / Padding(4),
+        "unk" / Default(Hex(Int32ul), 0),
         "len" / Hex(Int64ul), # len(this.data) + 0x30
         "devid" / FourCC,
         "modifier" / Int32ul,
