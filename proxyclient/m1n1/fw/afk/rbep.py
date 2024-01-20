@@ -72,7 +72,7 @@ class AFKRingBuf(Reloadable):
 
     def write_buf(self, off, data):
         return self.ep.iface.writemem(self.base + off, data)
-    
+
     def get_rptr(self):
         return self.ep.asc.p.read32(self.base + self.BLOCK_SIZE)
 
@@ -110,7 +110,7 @@ class AFKRingBuf(Reloadable):
     def write(self, data):
         hdr2, data = data[:8], data[8:]
         self.rptr = self.get_rptr()
-        
+
         if self.wptr < self.rptr and self.wptr + 0x10 >= self.rptr:
             raise AFKError("Ring buffer is full")
 
@@ -133,6 +133,7 @@ class AFKRingBuf(Reloadable):
         return self.wptr
 
 class AFKRingBufEndpoint(ASCBaseEndpoint):
+    RBCLS = AFKRingBuf
     BASE_MESSAGE = AFKEPMessage
     SHORT = "afkep"
 
@@ -176,7 +177,7 @@ class AFKRingBufEndpoint(ASCBaseEndpoint):
 
     @msg_handler(0x89, AFKEP_GetBuf)
     def GetBuf(self, msg):
-        size = msg.SIZE * AFKRingBuf.BLOCK_SIZE
+        size = msg.SIZE * self.RBCLS.BLOCK_SIZE
 
         if self.iobuffer:
             print("WARNING: trying to reset iobuffer!")
@@ -206,9 +207,9 @@ class AFKRingBufEndpoint(ASCBaseEndpoint):
         return True  # no op
 
     def init_rb(self, msg):
-        off = msg.OFFSET * AFKRingBuf.BLOCK_SIZE
-        size = msg.SIZE * AFKRingBuf.BLOCK_SIZE
-        return AFKRingBuf(self, self.iobuffer + off, size)
+        off = msg.OFFSET * self.RBCLS.BLOCK_SIZE
+        size = msg.SIZE * self.RBCLS.BLOCK_SIZE
+        return self.RBCLS(self, self.iobuffer + off, size)
 
     def start_queues(self):
         self.send(AFKEP_Start())
