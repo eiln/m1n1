@@ -2,28 +2,9 @@ from enum import IntEnum
 from construct import *
 from io import BytesIO
 
+from ..afk.epic import *
 from m1n1.utils import FourCC, chexdump
-from m1n1.constructutils import ZPadding
-from m1n1.fw.afk.epic import *
-
-EPICSubHeaderVer2 = Struct(
-    "length" / Int32ul,
-    "version" / Default(Int8ul, 2),
-    "category" / EPICCategory,
-    "type" / Hex(Int16ul),
-    "timestamp" / Default(Int64ul, 0),
-    "unk1" / Default(Hex(Int32ul), 0),
-    "unk2" / Default(Hex(Int32ul), 0),
-)
-
-AOPEPICHeader = Struct(
-    # ringbuf header
-    # "magic" / PaddedString(4, "utf8"),
-    # "size" / Hex(Int32ul),
-    # EPIC header
-    "header" / EPICHeader,
-    "subheader" / EPICSubHeaderVer2,
-)
+from m1n1.constructutils import *
 
 class AOPAudioPropKey(IntEnum):
     IS_READY     = 0x01
@@ -59,9 +40,7 @@ class EPICCall:
     def from_stream(cls, f):
         return cls(cls.ARGS.parse_stream(f))
 
-    def dump(self, logger=None):
-        if logger is None:
-            logger = print
+    def dump(self, logger=print):
         args_fmt = [f"{k}={v}" for (k, v) in self.args.items() if k != "_io"]
         rets_fmt = [f"{k}={v}" for (k, v) in self.rets.items() if k != "_io"]
         logger(f"{type(self).__name__}({', '.join(args_fmt)}) -> ({', '.join(rets_fmt)})")

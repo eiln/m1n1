@@ -8,6 +8,7 @@ from m1n1.fw.afk.rbep import *
 from m1n1.fw.afk.epic import *
 from m1n1.fw.aop import *
 from m1n1.fw.aop.afkrb import *
+from m1n1.fw.aop.aopep import *
 from m1n1.fw.aop.base import *
 from m1n1.fw.aop.ipc import *
 
@@ -172,8 +173,8 @@ class EPICEp(AFKEp):
             return
 
         fd = BytesIO(data)
-        hdr = EPICHeader.parse_stream(fd)
-        sub = EPICSubHeaderVer2.parse_stream(fd)
+        header = AOPEPICHeader.parse_stream(fd)
+        hdr, sub = header.header, header.subheader
 
         self.log(f"{dir} 0x{hdr.channel:x} Type {hdr.type} Ver {hdr.version} Tag {hdr.seq}")
         self.log(f"  Len {sub.length} Ver {sub.version} Cat {sub.category} Type {sub.type:#x} Ts {sub.timestamp:#x}")
