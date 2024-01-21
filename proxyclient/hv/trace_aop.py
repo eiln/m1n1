@@ -138,13 +138,13 @@ class EPICEp(AFKEp):
         return True
 
     def handle_notify(self, hdr, sub, fd):
+        return False
         for calltype in CALLTYPES:
             if calltype.matches(hdr, sub):
                 call = calltype.from_stream(fd)
                 self.trace_call_early(call)
                 self.pending_call = call
                 return True
-
         return False
 
     def handle_reply(self, hdr, sub, fd):
