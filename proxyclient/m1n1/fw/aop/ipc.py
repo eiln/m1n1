@@ -6,13 +6,15 @@ from ..afk.epic import *
 from m1n1.utils import FourCC, chexdump
 from m1n1.constructutils import *
 
-class AOPAudioPropKey(IntEnum):
+class AOPPropKey(IntEnum):
     IS_READY     = 0x01
-    UNK_11       = 0x11
+    MANUFACTURER = 0x0f  # wtf is a firefish2?
+    CHIP_ID      = 0x11
     PLACEMENT    = 0x1e
     UNK_21       = 0x21
     ORIENTATION  = 0x2e
     LOCATION_ID  = 0x30
+    PRODUCT_ID2  = 0x3f
     SERIAL_NO    = 0x3e
     VENDOR_ID    = 0x5a
     PRODUCT_ID   = 0x5b
@@ -48,9 +50,11 @@ class EPICCall:
     def read_resp(self, f):
         self.rets = self.RETS.parse_stream(f)
 
-CALLTYPES = []
+CALLTYPES = {}
 def reg_calltype(calltype):
-    CALLTYPES.append(calltype)
+    if (calltype.TYPE in CALLTYPES):
+        raise ValueError("duplicate type 0x%x" % (calltype.TYPE))
+    CALLTYPES[calltype.TYPE] = calltype
     return calltype
 
 @reg_calltype
@@ -60,7 +64,7 @@ class GetHIDDescriptor(EPICCall):
         "blank" / Const(0x0, Int32ul),
     )
     RETS = Struct(
-        "retcode" / Default(Hex(Int32ul), 0),
+        "retcode" / Const(0x0, Hex(Int32ul)),
         "descriptor" / HexDump(GreedyBytes),
     )
 
@@ -69,12 +73,96 @@ class GetProperty(EPICCall):
     TYPE = 0xa
     ARGS = Struct(
         "blank" / Const(0x0, Int32ul),
-        "key" / Enum(Int32ul, AOPAudioPropKey),
+        "key" / Enum(Int32ul, AOPPropKey),
     )
     RETS = Struct(
-        #"blank" / Const(0x0, Int32ul),
+        #"retcode" / Const(0x0, Int32ul),
         "value" / GreedyBytes,
     )
+
+class ALSPropertyKey(IntEnum):
+    INTERVAL      = 0x00
+    CALIBRATION   = 0x0b
+    MODE          = 0xd7
+    VERBOSITY     = 0xe1
+
+@reg_calltype
+class ALSSetProperty(EPICCall):
+    TYPE = 0x4
+    SUBCLASSES = {}
+
+    @classmethod
+    def subclass(cls, cls2):
+        cls.SUBCLASSES[int(cls2.SUBTYPE)] = cls2
+        return cls2
+
+@ALSSetProperty.subclass
+class ALSSetPropertyVerbosity(ALSSetProperty):
+    SUBTYPE = ALSPropertyKey.VERBOSITY
+    ARGS = Struct(
+        "blank" / Const(0x0, Int32ul),
+        "key" / Default(Hex(Int32ul), ALSPropertyKey.VERBOSITY),
+        "level" / Hex(Int32ul),
+    )
+    RETS = Struct(
+        "retcode" / Const(0x0, Int32ul),
+        "value" / GreedyBytes,
+    )
+
+@ALSSetProperty.subclass
+class ALSSetPropertyMode(ALSSetProperty):
+    SUBTYPE = ALSPropertyKey.MODE
+    ARGS = Struct(
+        "blank" / Const(0x0, Int32ul),
+        "key" / Default(Hex(Int32ul), ALSPropertyKey.MODE),
+        "mode" / Int32ul,
+    )
+    RETS = Struct(
+        "retcode" / Const(0x0, Int32ul),
+        "value" / GreedyBytes,
+    )
+
+@ALSSetProperty.subclass
+class ALSSetPropertyCalibration(ALSSetProperty):
+    SUBTYPE = ALSPropertyKey.CALIBRATION
+    ARGS = Struct(
+        "blank" / Const(0x0, Int32ul),
+        "key" / Default(Hex(Int32ul), ALSPropertyKey.CALIBRATION),
+        "value" / GreedyBytes,
+    )
+    RETS = Struct(
+        "retcode" / Const(0xE00002BC, Hex(Int32ul)),
+    )
+
+@ALSSetProperty.subclass
+class ALSSetPropertyInterval(ALSSetProperty):
+    SUBTYPE = ALSPropertyKey.INTERVAL
+    ARGS = Struct(
+        "blank" / Const(0x0, Int32ul),
+        "key" / Default(Hex(Int32ul), ALSPropertyKey.INTERVAL),
+        "interval" / Int32ul,
+    )
+    RETS = Struct(
+        "retcode" / Const(0x0, Int32ul),
+    )
+
+ALSLuxReport = Struct(
+    "unk0" / Const(0xec, Hex(Int8ul)),
+    "sequence" / Int32ul,
+    "timestamp" / Hex(Int64ul),
+    "red" / Int32ul,
+    "green" / Int32ul,
+    "blue" / Int32ul,
+    "clear" / Int32ul,
+    "lux_maybe" / Hex(Int32ul),
+    "unk_zero" / Int32ul, # 0
+    "status" / Int32ul, # 3
+    "gain" / Int16ul,
+    "unk3" / Int8ul,
+    "unk4" / Int8ul,
+    "unk5" / Int16ul,
+    "integration_time" / Int32ul,
+)
 
 @reg_calltype
 class WrappedCall(EPICCall):
@@ -304,6 +392,7 @@ class SetDeviceProp(WrappedCall):
 
 @reg_calltype
 class IndirectCall(EPICCall):
+    TYPE = 0xffff
     ARGS = EPICCmd
     RETS = EPICCmd
 

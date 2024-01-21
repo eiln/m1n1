@@ -183,6 +183,11 @@ class AOPGyroEndpoint(AOPEPICEndpoint):
 class AOPALSEndpoint(AOPEPICEndpoint): # als.hint
     SHORT = "als"
 
+    @report_handler(0xc4, ALSLuxReport)
+    def handle_lux(self, hdr, sub, fd, rep):
+        self.log(rep)
+        return True
+
 class AOPWakehintEndpoint(AOPEPICEndpoint): # wakehint
     SHORT = "wakehint"
 
